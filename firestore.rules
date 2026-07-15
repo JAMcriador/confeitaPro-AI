@@ -1,0 +1,247 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+        ('email' in request.auth.token && 
+         (request.auth.token.email == 'Josuealvaro.damata@gmail.com' || 
+          request.auth.token.email == 'josuealvaro.damata@gmail.com'))
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isStoreOwner(storeId) {
+      return isSignedIn() && (
+        (exists(/databases/$(database)/documents/stores/$(storeId)) && 
+         'ownerId' in get(/databases/$(database)/documents/stores/$(storeId)).data &&
+         get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         'storeId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.storeId == storeId)
+      );
+    }
+
+    // ------------------ USERS COLLECTION ------------------
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId 
+          && incoming().role == existing().role 
+          && incoming().plan == existing().plan 
+          && incoming().status == existing().status
+          && incoming().email == existing().email
+          && incoming().uid == existing().uid
+          && isValidUser(incoming())) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'role', 'status', 'plan']) 
+        && data.uid == request.auth.uid
+        && data.email is string
+        && data.email.size() <= 200
+        && data.name is string
+        && data.name.size() <= 200
+        && data.role in ['owner', 'admin']
+        && data.status in ['active', 'blocked']
+        && data.plan in ['free', 'pro']
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 100))
+        && (!('storeId' in data) || (data.storeId is string && data.storeId.size() <= 100));
+    }
+
+    // ------------------ STORES COLLECTION ------------------
+    match /stores/{storeId} {
+      allow get: if true; // Public landing pages require reading store metadata
+      allow list: if true; // Allows public listing or search if required
+      allow create: if isSignedIn() && isValidId(storeId) && incoming().ownerId == request.auth.uid && isValidStore(incoming());
+      allow update: if isSignedIn() && isValidId(storeId) && (
+        (existing().ownerId == request.auth.uid && incoming().ownerId == request.auth.uid && incoming().slug == existing().slug && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'address', 'workingHours', 'whatsapp', 'instagram', 'logoUrl', 'coverUrl'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    function isValidStore(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'slug', 'name'])
+        && data.id is string
+        && data.ownerId == request.auth.uid
+        && data.slug is string
+        && data.slug.size() <= 100
+        && data.name is string
+        && data.name.size() <= 200
+        && (!('description' in data) || (data.description is string && data.description.size() <= 5000))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 1000))
+        && (!('workingHours' in data) || (data.workingHours is string && data.workingHours.size() <= 500))
+        && (!('whatsapp' in data) || (data.whatsapp is string && data.whatsapp.size() <= 100))
+        && (!('instagram' in data) || (data.instagram is string && data.instagram.size() <= 200))
+        && (!('logoUrl' in data) || (data.logoUrl is string && data.logoUrl.size() <= 5000000))
+        && (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() <= 5000000))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 100));
+    }
+
+    // ------------------ PRODUCTS SUB-COLLECTION ------------------
+    match /stores/{storeId}/products/{productId} {
+      allow get: if true; // Public menu list
+      allow list: if true; // Public menu list
+      allow create: if isSignedIn() && isValidId(productId) && (
+        (isStoreOwner(storeId) && isValidProduct(incoming())) ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && isValidId(productId) && (
+        (isStoreOwner(storeId) && incoming().storeId == existing().storeId && isValidProduct(incoming())) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && isValidId(productId) && (
+        isStoreOwner(storeId) || 
+        isAdmin()
+      );
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['id', 'storeId', 'ownerId', 'name', 'price', 'active'])
+        && data.id is string
+        && data.storeId is string
+        && data.ownerId is string
+        && data.name is string
+        && data.name.size() <= 200
+        && data.price is number
+        && data.price >= 0
+        && data.active is bool
+        && (!('category' in data) || (data.category is string && data.category.size() <= 100))
+        && (!('description' in data) || (data.description is string && data.description.size() <= 5000))
+        && (!('productionTime' in data) || (data.productionTime is number && data.productionTime >= 0))
+        && (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 5000000))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 100));
+    }
+
+    // ------------------ ORDERS SUB-COLLECTION ------------------
+    match /stores/{storeId}/orders/{orderId} {
+      allow get, list: if isSignedIn() && (
+        isStoreOwner(storeId) || 
+        isAdmin()
+      );
+      allow create: if isValidId(orderId) && isValidOrderCreate(incoming()) && (
+        (exists(/databases/$(database)/documents/stores/$(storeId)) && incoming().ownerId == get(/databases/$(database)/documents/stores/$(storeId)).data.ownerId) ||
+        (exists(/databases/$(database)/documents/users/$(incoming().ownerId)) && get(/databases/$(database)/documents/users/$(incoming().ownerId)).data.storeId == storeId)
+      );
+      allow update: if isSignedIn() && isValidId(orderId) && (
+        (isStoreOwner(storeId) && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && isValidOrderStatus(incoming().status)) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    function isValidOrderCreate(data) {
+      return data.keys().hasAll(['id', 'storeId', 'ownerId', 'orderNumber', 'customerName', 'customerPhone', 'deliveryType', 'deliveryDateTime', 'items', 'total', 'status'])
+        && data.id is string
+        && data.storeId is string
+        && data.ownerId is string
+        && data.orderNumber is string
+        && data.customerName is string
+        && data.customerName.size() <= 200
+        && data.customerPhone is string
+        && data.customerPhone.size() <= 100
+        && data.deliveryType in ['pickup', 'delivery']
+        && data.status == 'pending'
+        && data.total is number
+        && data.total >= 0
+        && data.items is list
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 5000))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 100))
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 100));
+    }
+
+    function isValidOrderStatus(status) {
+      return status in ['pending', 'received', 'confirmed', 'preparing', 'decorating', 'ready', 'dispatched', 'delivered', 'cancelled'];
+    }
+
+    // ------------------ INVENTORY LOGS / HISTORY SUB-COLLECTION ------------------
+    match /stores/{storeId}/inventory_logs/{logId} {
+      allow get, list, create: if isSignedIn() && (
+        isStoreOwner(storeId) || 
+        isAdmin()
+      );
+    }
+
+    // ------------------ SHOPPING LIST SUB-COLLECTION ------------------
+    match /stores/{storeId}/shopping_list/{itemId} {
+      allow get, list, create, update, delete: if isSignedIn() && (
+        isStoreOwner(storeId) || 
+        isAdmin()
+      );
+    }
+
+    // ------------------ CUSTOMERS SUB-COLLECTION ------------------
+    match /stores/{storeId}/customers/{customerId} {
+      allow get, list, create, update, delete: if isSignedIn() && (
+        isStoreOwner(storeId) || 
+        isAdmin()
+      );
+    }
+
+    // ------------------ INVENTORY SUB-COLLECTION ------------------
+    match /stores/{storeId}/inventory/{inventoryId} {
+      allow get, list: if isSignedIn() && (
+        isStoreOwner(storeId) || 
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isValidId(inventoryId) && (
+        (isStoreOwner(storeId) && isValidInventory(incoming())) ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && isValidId(inventoryId) && (
+        (isStoreOwner(storeId) && incoming().storeId == existing().storeId && isValidInventory(incoming())) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && isValidId(inventoryId) && (
+        isStoreOwner(storeId) || 
+        isAdmin()
+      );
+    }
+
+    function isValidInventory(data) {
+      return data.keys().hasAll(['id', 'storeId', 'ownerId', 'name', 'quantity', 'unit', 'minStock'])
+        && data.id is string
+        && data.storeId is string
+        && data.ownerId is string
+        && data.name is string
+        && data.name.size() <= 200
+        && data.quantity is number
+        && data.quantity >= 0
+        && data.unit is string
+        && data.unit.size() <= 50
+        && data.minStock is number
+        && data.minStock >= 0
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 100));
+    }
+  }
+}

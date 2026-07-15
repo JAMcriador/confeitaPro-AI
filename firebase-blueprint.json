@@ -1,0 +1,157 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile containing plan and status details",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "storeId": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "admin"] },
+        "status": { "type": "string", "enum": ["active", "blocked"] },
+        "plan": { "type": "string", "enum": ["free", "pro"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role", "status", "plan"]
+    },
+    "store": {
+      "title": "Store",
+      "description": "Customized store configurations for multi-tenant",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "slug": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "address": { "type": "string" },
+        "workingHours": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "instagram": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "slug", "name"]
+    },
+    "product": {
+      "title": "Product",
+      "description": "Product listed in the confectionery catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "productionTime": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "storeId", "name", "price", "active"]
+    },
+    "order": {
+      "title": "Order",
+      "description": "Customer order details placed online",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "deliveryType": { "type": "string", "enum": ["pickup", "delivery"] },
+        "deliveryDateTime": { "type": "string" },
+        "notes": { "type": "string" },
+        "items": { "type": "array" },
+        "total": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "processing", "ready", "delivered", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "storeId", "orderNumber", "customerName", "customerPhone", "deliveryType", "deliveryDateTime", "items", "total", "status"]
+    },
+    "inventory": {
+      "title": "Inventory",
+      "description": "Simple inventory component of confectionery ingredients",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "name": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "minStock": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "storeId", "name", "quantity", "unit", "minStock"]
+    },
+    "inventory_log": {
+      "title": "InventoryLog",
+      "description": "Audit log for inventory movements and adjustments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "ingredientId": { "type": "string" },
+        "ingredientName": { "type": "string" },
+        "quantityChange": { "type": "number" },
+        "type": { "type": "string", "enum": ["adjustment", "production", "purchase"] },
+        "referenceName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "storeId", "ownerId", "ingredientId", "ingredientName", "quantityChange", "type", "createdAt"]
+    },
+    "shopping_list_item": {
+      "title": "ShoppingListItem",
+      "description": "An item on the automatic or custom confectionery shopping list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "storeId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "checked": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "storeId", "ownerId", "name", "quantity", "unit", "checked", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "Users collection with tenant profiles"
+    },
+    "/stores/{storeId}": {
+      "schema": "store",
+      "description": "Stores configurations"
+    },
+    "/stores/{storeId}/products/{productId}": {
+      "schema": "product",
+      "description": "Products nested within their respective stores"
+    },
+    "/stores/{storeId}/orders/{orderId}": {
+      "schema": "order",
+      "description": "Orders nested within their respective stores"
+    },
+    "/stores/{storeId}/inventory/{inventoryId}": {
+      "schema": "inventory",
+      "description": "Inventory items nested within their respective stores"
+    },
+    "/stores/{storeId}/inventory_logs/{logId}": {
+      "schema": "inventory_log",
+      "description": "Inventory movement audit log entries nested within their respective stores"
+    },
+    "/stores/{storeId}/shopping_list/{itemId}": {
+      "schema": "shopping_list_item",
+      "description": "Shopping list items nested within their respective stores"
+    }
+  }
+}

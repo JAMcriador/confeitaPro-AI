@@ -1,0 +1,6 @@
+{
+  "name": "ConfeitaPro AI",
+  "description": "Plataforma SaaS simples e intuitiva para confeiteiras gerenciarem pedidos, agenda, estoque e loja online.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
